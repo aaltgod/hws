@@ -9,12 +9,27 @@ import (
 
 var isLastChild = make(map[int]bool)
 
+func addSymbols(out io.Writer, dir []os.FileInfo, i, childLvl int, name string) {
+	if i == len(dir)-1 {
+		io.WriteString(out, "└───"+name+"\n")
+		isLastChild[childLvl] = true
+	} else {
+		io.WriteString(out, "├───"+name+"\n")
+		_, exists := isLastChild[childLvl]
+		if exists {
+			delete(isLastChild, childLvl)
+		}
+	}
+}
+
 func addTabs(out io.Writer, childLvl int) {
 	for i := 0; i < childLvl; i++ {
 		_, exists := isLastChild[i]
 		if exists {
+			//fmt.Print(i)
 			io.WriteString(out, "\t")
 		} else {
+			//fmt.Print(i)
 			io.WriteString(out, "│\t")
 		}
 	}
@@ -27,7 +42,6 @@ func sortDir(dir []os.FileInfo) []os.FileInfo {
 	for i, v := range dir {
 		name := v.Name()
 		names = append(names, name)
-
 		fileInfoIdx[i] = v
 	}
 
@@ -56,39 +70,24 @@ func readDir(out io.Writer, path string, pf bool, pwd *os.File, childLvl int) er
 	dir = sortDir(dir)
 
 	for i, v := range dir {
+		name := v.Name()
+
 		if v.IsDir() {
-			newPath := path + string(os.PathSeparator) + v.Name()
+			newPath := path + string(os.PathSeparator) + name
 			pwd, err = os.Open(newPath)
 			if err != nil {
 				return fmt.Errorf("NEWPATH PWD: %s", err)
 			}
 
 			addTabs(out, childLvl)
-
-			if i == len(dir)-1 {
-				isLastChild[childLvl] = true
-
-				io.WriteString(out, "└───"+v.Name()+"\n")
-
-			} else {
-				io.WriteString(out, "├───"+v.Name()+"\n")
-			}
+			addSymbols(out, dir, i, childLvl, name)
 
 			if err = readDir(out, newPath, pf, pwd, childLvl+1); err != nil {
 				return fmt.Errorf("CALL readDir: %s", err)
 			}
-
 		} else {
 			addTabs(out, childLvl)
-
-			if i == len(dir)-1 {
-				isLastChild[childLvl] = true
-
-				io.WriteString(out, "└───"+v.Name()+"\n")
-
-			} else {
-				io.WriteString(out, "├───"+v.Name()+"\n")
-			}
+			addSymbols(out, dir, i, childLvl, name)
 		}
 	}
 	return nil
