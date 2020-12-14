@@ -5,16 +5,36 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strconv"
 )
 
 var isLastChild = make(map[int]bool)
 
-func addSymbols(out io.Writer, dir []os.FileInfo, i, childLvl int, name string) {
+func addFileSize(out io.Writer, file os.FileInfo) {
+	fileSize := file.Size()
+	if fileSize == 0 {
+		io.WriteString(out, " (empty)\n")
+	} else {
+		io.WriteString(out, " (" + strconv.FormatInt(fileSize, 10) + "b)\n")
+	}
+}
+
+func addSymbols(out io.Writer, dir []os.FileInfo, i, childLvl int, name string, this os.FileInfo) {
 	if i == len(dir)-1 {
-		io.WriteString(out, "└───"+name+"\n")
+		if this.IsDir() {
+			io.WriteString(out, "└───"+name+"\n")
+		} else {
+			io.WriteString(out, "└───"+name)
+		}
+
 		isLastChild[childLvl] = true
 	} else {
-		io.WriteString(out, "├───"+name+"\n")
+		if this.IsDir() {
+			io.WriteString(out, "├───"+name+"\n")
+		} else {
+			io.WriteString(out, "├───"+name)
+		}
+
 		_, exists := isLastChild[childLvl]
 		if exists {
 			delete(isLastChild, childLvl)
@@ -26,10 +46,8 @@ func addTabs(out io.Writer, childLvl int) {
 	for i := 0; i < childLvl; i++ {
 		_, exists := isLastChild[i]
 		if exists {
-			//fmt.Print(i)
 			io.WriteString(out, "\t")
 		} else {
-			//fmt.Print(i)
 			io.WriteString(out, "│\t")
 		}
 	}
@@ -67,8 +85,17 @@ func readDir(out io.Writer, path string, pf bool, pwd *os.File, childLvl int) er
 		return fmt.Errorf("DIR: %s", err)
 	}
 
-	dir = sortDir(dir)
-
+	if !pf{
+		var newDir []os.FileInfo
+		for _, v := range dir {
+			if v.IsDir() {
+				newDir = append(newDir, v)
+			}
+		}
+		dir = sortDir(newDir)
+	} else {
+		dir = sortDir(dir)
+	}
 	for i, v := range dir {
 		name := v.Name()
 
@@ -80,14 +107,15 @@ func readDir(out io.Writer, path string, pf bool, pwd *os.File, childLvl int) er
 			}
 
 			addTabs(out, childLvl)
-			addSymbols(out, dir, i, childLvl, name)
+			addSymbols(out, dir, i, childLvl, name, v)
 
 			if err = readDir(out, newPath, pf, pwd, childLvl+1); err != nil {
 				return fmt.Errorf("CALL readDir: %s", err)
 			}
 		} else {
 			addTabs(out, childLvl)
-			addSymbols(out, dir, i, childLvl, name)
+			addSymbols(out, dir, i, childLvl, name, v)
+			addFileSize(out, v)
 		}
 	}
 	return nil
@@ -104,8 +132,6 @@ func dirTree(out io.Writer, path string, pf bool) error {
 	if err = readDir(out, path, pf, pwd, childLvl); err != nil {
 		return err
 	}
-
-	fmt.Fprintln(out)
 
 	return nil
 }
